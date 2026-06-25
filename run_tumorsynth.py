@@ -119,6 +119,18 @@ def main():
     parser.add_argument("-c", "--cleanup", action="store_true", help="Delete intermediate files, keeping only final native-space segmentations")
     args = parser.parse_args()
 
+    # Check for FSL dependencies upfront to avoid failing after the long registration step.
+    import shutil
+    missing_deps = []
+    for dep in ('fslmaths', 'fslmerge'):
+        if not shutil.which(dep):
+            missing_deps.append(dep)
+    if missing_deps:
+        log("Error: Missing required FSL (FMRIB Software Library) dependencies: " + ", ".join(missing_deps))
+        log("Please ensure FSL is installed and available in your PATH.")
+        log("On a cluster, you may need to run 'module load fsl' or source your FSL configuration.")
+        return
+
     # Resolve the input path and verify it exists before processing.
     input_path = args.input_t1c.resolve()
     if not input_path.exists():

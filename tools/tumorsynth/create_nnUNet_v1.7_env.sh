@@ -85,12 +85,24 @@ if [[ ${#UNRECOGNIZED} -ne 0 ]]; then
     echo "${UNRECOGNIZED[@]}"
     show_help 1
 fi
+# auto-detect conda.sh if not provided
+if [ -z "$SOURCE_CONDA" ]; then
+    if command -v conda &> /dev/null; then
+        CONDA_BASE=$(conda info --base 2>/dev/null)
+        if [ -f "$CONDA_BASE/etc/profile.d/conda.sh" ]; then
+            SOURCE_CONDA="$CONDA_BASE/etc/profile.d/conda.sh"
+            echo "Auto-detected conda.sh at: $SOURCE_CONDA"
+        fi
+    fi
+fi
 
 # test that the conda.sh script exists
-if [ ! -f $SOURCE_CONDA ]; then
-    echo "Cannot access the 'conda.sh' script at $SOURCE_CONDA, exiting..."
+if [ -z "$SOURCE_CONDA" ] || [ ! -f "$SOURCE_CONDA" ]; then
+    echo "Cannot access the 'conda.sh' script (value: '$SOURCE_CONDA'), exiting..."
+    echo "Please specify the correct path using the -e/--conda-env flag (e.g. -e ~/miniconda3/etc/profile.d/conda.sh)"
     show_help 1
 fi
+
 
 # test that the model file exists
 if [ ! -d $MODEL_FILE_PATH ]; then
@@ -130,7 +142,14 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # copy over the model file
-cp -r $MODEL_FILE_PATH $TRAINED_MODEL_DESTINATION
+if [ -d "$MODEL_FILE_PATH/Task002_Tumor" ] || [ -d "$MODEL_FILE_PATH/Task003_InnerTumor" ]; then
+    echo "Copying contents of $MODEL_FILE_PATH to $TRAINED_MODEL_DESTINATION..."
+    cp -r "$MODEL_FILE_PATH"/. "$TRAINED_MODEL_DESTINATION"
+else
+    echo "Copying $MODEL_FILE_PATH to $TRAINED_MODEL_DESTINATION..."
+    cp -r "$MODEL_FILE_PATH" "$TRAINED_MODEL_DESTINATION"
+fi
+
 if [[ $? -ne 0 ]]; then
     echo "An error occurred while attempting to copy the trained model files."
     exit 1
@@ -148,7 +167,7 @@ trap cleanup EXIT
 source $SOURCE_CONDA
 
 # cretate the conda env
-CONDA_CREATE_CMD="conda create -n $CREATE_ENV_NAME python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 -c pytorch -y"
+CONDA_CREATE_CMD="conda create -n $CREATE_ENV_NAME python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 \"numpy<2\" \"mkl<2025.0.0\" -c pytorch -y"
 
 # append the cuda dependencies if --cuda passed
 if [[ $INSTALL_CUDA -eq 1 ]]; then
@@ -205,14 +224,19 @@ fi
 cd $CWD
 
 PATH_FILE="nnUNet_v1.7_path.sh"
-# add bash shebang to PATH_FILE
-echo "#!/usr/bin/env bash" >> $PATH_FILE
+# add bash shebang and dynamic path exports to PATH_FILE
+echo "#!/usr/bin/env bash" > $PATH_FILE
+echo 'SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"' >> $PATH_FILE
+echo 'export nnUNet_raw_data_base="$SCRIPT_DIR/nnUNet_v1.7/nnUNet_raw_data_base"' >> $PATH_FILE
+echo 'export nnUNet_preprocessed="$SCRIPT_DIR/nnUNet_v1.7/nnUNet_preprocessed"' >> $PATH_FILE
+echo 'export RESULTS_FOLDER="$SCRIPT_DIR/nnUNet_v1.7/nnUNet_trained_models"' >> $PATH_FILE
 
 echo ""
 echo "Set the following variables in your env so nnUNet can locate your models and data"
-echo "export nnUNet_raw_data_base=$nnUNet_raw_data_base" | tee -a $PATH_FILE
-echo "export nnUNet_preprocessed=$nnUNet_preprocessed" | tee -a $PATH_FILE
-echo "export RESULTS_FOLDER=$RESULTS_FOLDER" | tee -a $PATH_FILE
+echo "export nnUNet_raw_data_base=$nnUNet_raw_data_base"
+echo "export nnUNet_preprocessed=$nnUNet_preprocessed"
+echo "export RESULTS_FOLDER=$RESULTS_FOLDER"
+echo "These dynamic exports have been written to $PATH_FILE."
 
 echo "Installation complete"
 echo "Activate the conda envrionment named: $CREATE_ENV_NAME, and source $PATH_FILE to run the nnUNet model."

@@ -24,14 +24,17 @@ Because the trained model weights are very large (~3.5GB), they are ignored by g
    - Extract the contents so that they are located precisely under `tools/tumorsynth/models/Task002_Tumor/` and `tools/tumorsynth/models/Task003_InnerTumor/`.
 
 2. **Run the Environment Setup Script:**
-   Use the provided bash script [create_nnUNet_v1.7_env.sh](file:///Users/felix/GitHub/IGL-TumorSynth-Tutorial/tools/tumorsynth/create_nnUNet_v1.7_env.sh) to create a conda environment (named `nnUNet_v1.7`) and install all required machine learning and processing dependencies:
+   Use the provided bash script [create_nnUNet_v1.7_env.sh](file:///Users/felix/GitHub/IGL-TumorSynth-Tutorial/tools/tumorsynth/create_nnUNet_v1.7_env.sh) to create a conda environment (named `nnUNet_v1.7`) and install all required machine learning and processing dependencies.
+   
+   If `conda` is active in your terminal, the script will automatically locate your `conda.sh` profile script. Simply run:
    ```bash
    cd tools/tumorsynth
    chmod +x create_nnUNet_v1.7_env.sh
-   # Replace with the path to your conda.sh profile script
-   ./create_nnUNet_v1.7_env.sh -e /opt/anaconda3/etc/profile.d/conda.sh -n nnUNet_v1.7 -m models -d .
+   ./create_nnUNet_v1.7_env.sh -n nnUNet_v1.7 -m models -d .
    cd ../..
    ```
+   
+   *Note: If the script cannot auto-detect conda, you can manually specify the path using the `-e` flag (e.g., `./create_nnUNet_v1.7_env.sh -e "$(conda info --base)/etc/profile.d/conda.sh" -n nnUNet_v1.7 -m models -d .` or pointing directly to your conda profile script).*
 
 3. **Install ANTsPy:**
    ANTsPy is used for registering patient scans to the SRI24 atlas. Activate the new conda environment and install `antspyx`:
