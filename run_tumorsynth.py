@@ -105,7 +105,7 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
                 if p.exists(): p.unlink()
         log("done.", timestamp=False)
 
-    log(f"[{scan_name}] Processing complete! Outputs saved in {scan_out_dir}\n")
+    log(f"[{scan_name}] Processing complete! Outputs saved in {scan_out_dir}")
 
 def main():
     """

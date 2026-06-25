@@ -36,4 +36,3 @@ fi
 
 echo "Starting TumorSynth Segmentation on: $INPUT_SCAN..."
 python run_tumorsynth.py "$INPUT_SCAN" "$@"
-echo "Segmentation complete!"
