@@ -79,10 +79,39 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     
     # Transform the multi-class inner tumor segmentation from atlas space back to native space.
     it_native_img = transform_to_native(native_img, it_atlas_img, inv_transforms)
-    ants.image_write(it_native_img, str(scan_out_dir / f"{scan_name}_inner_tumor_seg.nii.gz"))
+    
+    # Remap the internal model labels to your configured output labels in config.py.
+    # The raw model outputs:
+    # 1 -> edema
+    # 2 -> enhancing_tumor
+    # 3 -> necrosis
+    it_arr = it_native_img.numpy()
+    import numpy as np
+    remapped_arr = np.zeros_like(it_arr)
+    
+    from config import INNER_TUMOR_LABELS
+    raw_to_class = {
+        1: 'edema',
+        2: 'enhancing_tumor',
+        3: 'necrosis'
+    }
+    
+    for raw_val, class_name in raw_to_class.items():
+        target_val = INNER_TUMOR_LABELS.get(class_name)
+        if target_val is not None:
+            remapped_arr[it_arr == raw_val] = target_val
+    
+    it_native_img_remapped = ants.from_numpy(
+        remapped_arr.astype(np.float32),
+        origin=it_native_img.origin,
+        spacing=it_native_img.spacing,
+        direction=it_native_img.direction
+    )
+    
+    ants.image_write(it_native_img_remapped, str(scan_out_dir / f"{scan_name}_inner_tumor_seg.nii.gz"))
     
     # Extract and save individual binary sub-masks (necrosis, enhancing, etc.) in native space.
-    extract_sub_masks(it_native_img, scan_out_dir, scan_name)
+    extract_sub_masks(it_native_img_remapped, scan_out_dir, scan_name)
     log("done.", timestamp=False)
         
     if cleanup:
