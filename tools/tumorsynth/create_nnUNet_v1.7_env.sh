@@ -167,7 +167,7 @@ trap cleanup EXIT
 source $SOURCE_CONDA
 
 # cretate the conda env
-CONDA_CREATE_CMD="conda create -n $CREATE_ENV_NAME python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 \"numpy<2\" \"mkl<2025.0.0\" -c pytorch -y"
+CONDA_CREATE_CMD="conda create -n $CREATE_ENV_NAME python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 numpy<2 mkl<2025.0.0 -c pytorch -y"
 
 # append the cuda dependencies if --cuda passed
 if [[ $INSTALL_CUDA -eq 1 ]]; then
