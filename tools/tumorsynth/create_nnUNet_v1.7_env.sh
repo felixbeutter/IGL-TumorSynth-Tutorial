@@ -166,12 +166,20 @@ trap cleanup EXIT
 # source the conda.sh script
 source $SOURCE_CONDA
 
-# cretate the conda env
-CONDA_CREATE_CMD="conda create -n $CREATE_ENV_NAME python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 numpy<2 mkl<2025.0.0 -c pytorch -y"
+# create the conda env
+CONDA_CREATE_CMD="conda create -y -n $CREATE_ENV_NAME -c pytorch"
 
-# append the cuda dependencies if --cuda passed
+# append the nvidia channel if --cuda passed
 if [[ $INSTALL_CUDA -eq 1 ]]; then
-    CONDA_CREATE_CMD="$CONDA_CREATE_CMD pytorch-cuda=11.8 -c nvidia"
+    CONDA_CREATE_CMD="$CONDA_CREATE_CMD -c nvidia"
+fi
+
+# append the packages
+CONDA_CREATE_CMD="$CONDA_CREATE_CMD python=3.10 pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 numpy<2 mkl<2025.0.0"
+
+# append the cuda package if --cuda passed
+if [[ $INSTALL_CUDA -eq 1 ]]; then
+    CONDA_CREATE_CMD="$CONDA_CREATE_CMD pytorch-cuda=11.8"
 fi
 
 echo "Creating conda env: $CONDA_CREATE_CMD"
