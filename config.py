@@ -9,6 +9,6 @@ USE_GPU = False
 # BraTS-compliant inner tumor sub-structure labels as output by TumorSynth
 INNER_TUMOR_LABELS = {
     'necrosis': 1,         # Necrotic / Non-enhancing tumor core (NCR/NET)
-    'enhancing_tumor': 2,  # Enhancing tumor (ET)
-    'edema': 3,            # Peritumoral edema (ED)
+    'enhancing_tumor': 4,  # Enhancing tumor (ET)
+    'edema': 2,            # Peritumoral edema (ED)
 }
