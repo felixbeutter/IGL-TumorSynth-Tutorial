@@ -128,7 +128,7 @@ For the given scan, the script will:
 
 1. **Register to Atlas**: Perform a non-linear (SyN) registration of your native T1c scan to the SRI24 T1 atlas using `antspyx` (defined in [registration.py](registration.py)).
 2. **Whole Tumor Segmentation**: Run `mri_TumorSynth --wholetumor` to segment the full brain and tumor (defined in [segmentation.py](segmentation.py)).
-3. **Inner Tumor Segmentation**: Create a masked ROI of the tumor and run `mri_TumorSynth --innertumor` to identify specific sub-structures (non-enhancing, necrosis, and enhancing ring).
+3. **Inner Tumor Segmentation**: Create a masked ROI of the tumor and run `mri_TumorSynth --innertumor` to identify specific sub-structures (necrosis, enhancing tumor, and peritumoral edema).
 4. **Native Space Transformation**: Map all resulting masks and segmentations back to the original patient's native space and save them in the `outputs/` directory.
 
 ### Outputs Structure
@@ -136,8 +136,8 @@ For the given scan, the script will:
 All results are stored in a scan-specific directory under the chosen output directory (e.g., `outputs/UCSF-PDGM-0004_T1c/`):
 - `<scan_name>_whole_tumor_mask.nii.gz`: Binary mask of the whole tumor in native space.
 - `<scan_name>_inner_tumor_seg.nii.gz`: Multi-label segmentation of inner tumor structures in native space.
-- `<scan_name>_non_enhancing_mask.nii.gz`: Binary mask of the non-enhancing/edema component (Label 1, NET/Edema).
-- `<scan_name>_necrosis_mask.nii.gz`: Binary mask of the necrotic core (Label 2, NCR).
-- `<scan_name>_enhancing_mask.nii.gz`: Binary mask of the enhancing tumor ring (Label 3, ET).
+- `<scan_name>_necrosis_mask.nii.gz`: Binary mask of the necrotic / non-enhancing tumor core (Label 1, NCR/NET).
+- `<scan_name>_enhancing_tumor_mask.nii.gz`: Binary mask of the enhancing tumor (Label 2, ET).
+- `<scan_name>_edema_mask.nii.gz`: Binary mask of the peritumoral edema (Label 3, ED).
 
 These structures are configured in [config.py](config.py).
