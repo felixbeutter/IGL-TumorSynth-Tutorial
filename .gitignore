@@ -1,0 +1,9 @@
+assets/sample_scans/
+outputs/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Ignore large TumorSynth models (approx 3.5GB)
+tools/tumorsynth/models/
+tools/tumorsynth/nnUNet_v1.7/
