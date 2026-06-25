@@ -17,9 +17,13 @@ The internal [mri_TumorSynth](file:///Users/felix/GitHub/IGL-TumorSynth-Tutorial
   ```
 
 ### 2. Set Up the Python Conda Environment
-This repository contains a self-contained TumorSynth folder under `tools/tumorsynth/` (including pre-loaded model weights). To set up the Conda environment:
+Because the trained model weights are very large (~3.5GB), they are ignored by git and are not included in a fresh clone. You must download them first.
 
-1. **Run the Environment Setup Script:**
+1. **Download the pre-trained model weights:**
+   - Follow the instructions on the [official FreeSurfer Wiki](https://surfer.nmr.mgh.harvard.edu/fswiki/TumorSynth#Installation) to download the model zip files for the whole tumor (`TumorSynth_v1.0.zip`) and the inner tumor (`Task003_InnerTumor.zip`).
+   - Extract the contents so that they are located precisely under `tools/tumorsynth/models/Task002_Tumor/` and `tools/tumorsynth/models/Task003_InnerTumor/`.
+
+2. **Run the Environment Setup Script:**
    Use the provided bash script [create_nnUNet_v1.7_env.sh](file:///Users/felix/GitHub/IGL-TumorSynth-Tutorial/tools/tumorsynth/create_nnUNet_v1.7_env.sh) to create a conda environment (named `nnUNet_v1.7`) and install all required machine learning and processing dependencies:
    ```bash
    cd tools/tumorsynth
@@ -29,7 +33,7 @@ This repository contains a self-contained TumorSynth folder under `tools/tumorsy
    cd ../..
    ```
 
-2. **Install ANTsPy:**
+3. **Install ANTsPy:**
    ANTsPy is used for registering patient scans to the SRI24 atlas. Activate the new conda environment and install `antspyx`:
    ```bash
    conda activate nnUNet_v1.7
