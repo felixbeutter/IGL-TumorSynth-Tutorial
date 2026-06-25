@@ -53,11 +53,8 @@ def execute_tumorsynth(input_img: Path, out_img: Path, mask_type: str = 'wholetu
         cmd.append('--wholetumor')
     elif mask_type == 'innertumor':
         cmd.append('--innertumor')
-
-    log(f"Running TumorSynth ({mask_type}) on {input_img.name}... ", newline=False)
     # Execute the subprocess command using our unified run_cmd utility.
     run_cmd(cmd)
-    log("done.", timestamp=False)
 
 def extract_whole_tumor_mask(wt_atlas_img):
     """

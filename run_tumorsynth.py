@@ -44,10 +44,11 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     ants.image_write(t1c_in_atlas_img, str(t1c_in_atlas_path))
     
     log("done.", timestamp=False)
-    log(f"[{scan_name}] 2. Running Whole Tumor Segmentation...")
+    log(f"[{scan_name}] 2. Running Whole Tumor Segmentation... ", newline=False)
     # Run TumorSynth in 'wholetumor' mode. This generates a raw multi-label parcellation.
     wt_raw_atlas_path = scan_out_dir / "tumorsynth_wt_raw_SRI24.nii.gz"
     execute_tumorsynth(t1c_in_atlas_path, wt_raw_atlas_path, mask_type='wholetumor', use_gpu=use_gpu)
+    log("done.", timestamp=False)
     
     # Extract the binary whole tumor mask from the parcellation by thresholding label 18.
     # Save the mask in atlas space for downstream masking and potential verification.
@@ -55,7 +56,7 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     wt_mask_atlas_img = extract_whole_tumor_mask(wt_atlas_img)
     ants.image_write(wt_mask_atlas_img, str(scan_out_dir / f"{scan_name}_whole_tumor_mask_SRI24.nii.gz"))
     
-    log(f"[{scan_name}] 3. Running Inner Tumor Segmentation...")
+    log(f"[{scan_name}] 3. Running Inner Tumor Segmentation... ", newline=False)
     # Mask the atlas-aligned T1c image with the binary whole tumor mask to isolate the tumor ROI.
     # The inner tumor segmentation model requires this masked ROI as input to focus on internal sub-structures.
     t1c_roi_img = t1c_in_atlas_img * wt_mask_atlas_img
@@ -66,6 +67,7 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     it_raw_atlas_path = scan_out_dir / "tumorsynth_it_raw_SRI24.nii.gz"
     execute_tumorsynth(t1c_roi_path, it_raw_atlas_path, mask_type='innertumor', use_gpu=use_gpu)
     it_atlas_img = ants.image_read(str(it_raw_atlas_path))
+    log("done.", timestamp=False)
     
     log(f"[{scan_name}] 4. Transforming results back to Native Space... ", newline=False)
     # Fetch the list of inverse registration transforms to map back to the native geometry.
@@ -81,6 +83,7 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     
     # Extract and save individual binary sub-masks (necrosis, enhancing, etc.) in native space.
     extract_sub_masks(it_native_img, scan_out_dir, scan_name)
+    log("done.", timestamp=False)
         
     if cleanup:
         log(f"[{scan_name}] 5. Cleaning up intermediate files... ", newline=False)
@@ -102,7 +105,6 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
                 if p.exists(): p.unlink()
         log("done.", timestamp=False)
 
-    log("done." if not cleanup else "", timestamp=False)
     log(f"[{scan_name}] Processing complete! Outputs saved in {scan_out_dir}\n")
 
 def main():
