@@ -34,5 +34,4 @@ if [ "$#" -ge 1 ]; then
     shift 1
 fi
 
-echo "Starting TumorSynth Segmentation on: $INPUT_SCAN..."
 python run_tumorsynth.py "$INPUT_SCAN" "$@"

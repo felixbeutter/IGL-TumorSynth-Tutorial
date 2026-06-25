@@ -26,6 +26,8 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     scan_out_dir = output_dir / scan_name
     scan_out_dir.mkdir(parents=True, exist_ok=True)
 
+    log(f"[{scan_name}] Starting TumorSynth pipeline for: {native_t1c_path.name}")
+
     # Define paths to the SRI24 atlas reference templates.
     # TumorSynth is trained on SRI24-aligned brain scans, so registration is mandatory.
     sri24_t1 = atlas_dir / 'SRI24_T1.nii.gz'
