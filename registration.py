@@ -3,18 +3,20 @@ from pathlib import Path
 
 def register_to_atlas(native_img, atlas_img, atlas_mask):
     """
-    Performs a non-linear (SyN) registration of a native image to an atlas space.
-    
+    Step 1: Non-linear (SyN) registration of native T1c image to atlas space.
+
     Args:
         native_img: ANTsImage representing the native scan (e.g. T1c).
         atlas_img: ANTsImage representing the fixed atlas template.
         atlas_mask: ANTsImage representing the brain mask of the atlas.
-        
+
     Returns:
-        tuple containing:
-            - t1c_in_atlas_img: The native image registered to atlas space and skull-stripped.
-            - registration: A dictionary containing the forward and inverse transforms.
+        tuple[ants.ANTsImage, dict]: (t1c_in_atlas_img, registration)
+            t1c_in_atlas_img: The skull-stripped T1c image registered to atlas space.
+            registration: Dictionary containing forward and inverse transform paths.
     """
+    # Run the ANTs registration with Symmetric Normalization (SyN) deformable model.
+    # We restrict registration using the fixed brain mask to ignore non-brain/skull regions.
     registration = ants.registration(
         fixed=atlas_img, 
         moving=native_img, 
@@ -22,28 +24,32 @@ def register_to_atlas(native_img, atlas_img, atlas_mask):
         mask=atlas_mask
     )
     
-    # Apply atlas mask for skull stripping in atlas space
+    # Multiply the warped output image by the template brain mask.
+    # This skull-strips the patient's image in atlas space, removing surrounding tissues.
     t1c_in_atlas_img = registration['warpedmovout'] * atlas_mask
     
     return t1c_in_atlas_img, registration
 
 def transform_to_native(native_img, img_in_atlas, inv_transforms):
     """
-    Transforms an image or mask from atlas space back to native space.
-    
+    Step 5: Transform registered image or mask from atlas space back to native space.
+
     Args:
         native_img: The original ANTsImage in native space (used as reference geometry).
         img_in_atlas: The ANTsImage to be transformed back.
         inv_transforms: List of paths to the inverse transforms.
-        
+
     Returns:
-        ANTsImage: The transformed image in native space.
+        ants.ANTsImage: The transformed image in native space.
     """
     # Build inversion list dynamically:
-    # Affine transform (.mat) needs to be inverted (True)
-    # Warp field (.nii.gz) is already inverse and should not be inverted (False)
+    # 1. The linear affine transform (.mat) must be inverted (True) to map atlas -> native.
+    # 2. The nonlinear warp field (.nii.gz) is already stored as an inverse warp from the
+    #    moving-to-fixed registration, so it should not be inverted (False).
     whichtoinvert = [True if str(t).endswith('.mat') else False for t in inv_transforms]
     
+    # Apply the transforms back to the original native image space.
+    # We use nearest-neighbor interpolation to preserve the discrete integer values of masks/labels.
     native_space_img = ants.apply_transforms(
         fixed=native_img, 
         moving=img_in_atlas,
