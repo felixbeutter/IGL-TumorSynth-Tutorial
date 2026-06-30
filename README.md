@@ -1,6 +1,6 @@
 # TumorSynth Tutorial
 
-This repository provides a standalone, clean, and simple tutorial on how to use **TumorSynth** for brain tumor segmentation. It demonstrates how to take native T1c MRI scans, align them to a common atlas (SRI24), run TumorSynth to segment the whole tumor and inner tumor sub-structures, and transform the segmentations back to the original native space.
+This repository provides a standalone, clean, and simple tutorial on how to use **TumorSynth** for brain tumor segmentation. It demonstrates how to take native multi-modal MRI scans (e.g., T1c, T2, FLAIR), align them to a common atlas (SRI24), run TumorSynth to segment the whole tumor and inner tumor sub-structures, and transform the segmentations back to the original native space.
 
 ---
 
@@ -79,7 +79,7 @@ source tools/tumorsynth/nnUNet_v1.7_path.sh
 
 The `assets/` folder is structured as follows:
 - `SRI24_atlas/`: Contains the reference atlas and brain mask required for registration.
-- `sample_scans/`: Place your raw, native space `.nii.gz` T1c scans here (includes UCSF sample scans).
+- `sample_scans/`: Place your raw, native space `.nii.gz` scans here. They should be co-registered to each other if you are passing multiple modalities per patient.
 
 To run the pipeline on a scan:
 
@@ -89,33 +89,35 @@ To run the pipeline on a scan:
    source tools/tumorsynth/nnUNet_v1.7_path.sh
    ```
 
-2. Run the main pipeline script [run_tumorsynth.py](run_tumorsynth.py) by providing the path to a T1c NIfTI scan:
+2. Run the main pipeline script [run_tumorsynth.py](run_tumorsynth.py) by providing the path to your NIfTI scans:
 
    On **macOS** (CPU-only):
    ```bash
-   python run_tumorsynth.py assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c
+   python run_tumorsynth.py -i assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c
    ```
 
    On **Linux/HPC** (with GPU):
    ```bash
-   python run_tumorsynth.py assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c --gpu
+   python run_tumorsynth.py -i assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c --gpu
    ```
 
 ### Command Line Arguments
 
-- `input_t1c`: (Required) Path to the native T1c `.nii.gz` scan.
-- `-o`, `--output-dir`: (Optional) Path to save the outputs. Defaults to the same directory as the input scan.
+- `-i`, `--inputs`: (Required) Path to one or more native `.nii.gz` scans (e.g., T1c, T2, FLAIR). If multiple scans are provided, they **must be co-registered** to each other in their native space.
+- `--reg-input`: (Optional) Path to the specific input file used for atlas registration. Defaults to the first input. Using a T1 or T1c scan is highly recommended.
+- `--scan-name`: (Optional) Base name for the outputs. Defaults to the name of the `--reg-input` without its extension.
+- `-o`, `--output-dir`: (Optional) Path to save the outputs. Defaults to the same directory as the reg-input scan.
 - `-a`, `--atlas-dir`: (Optional) Path to the SRI24 atlas. Defaults to `assets/SRI24_atlas/`.
 - `-g`, `--gpu`: (Optional) Flag to run TumorSynth with GPU acceleration.
 - `-c`, `--cleanup`: (Optional) Flag to automatically delete intermediate atlas-space files and transforms, keeping only the final native space segmentations.
 
 ### Running on a SLURM Cluster
 
-If you are running the pipeline on an HPC cluster with SLURM, a submission script [slurm_hpc.sh](slurm_hpc.sh) is provided at the root of the repository.
+If you are running the pipeline on an HPC cluster with SLURM, a submission script [slurm_wrapper.sh](slurm_wrapper.sh) is provided at the root of the repository.
 
 To submit the segmentation job, run:
 ```bash
-sbatch slurm_hpc.sh assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz --gpu --cleanup -o outputs
+sbatch slurm_wrapper.sh -i assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz --gpu --cleanup -o outputs
 ```
 
 This script automatically activates the `nnUNet_v1.7` conda environment, sets up the dynamic path variables, and submits the job to the GPU partition. Logs will be written to `logs/tumorsynth_<JOBID>.out`.
@@ -126,7 +128,7 @@ This script automatically activates the `nnUNet_v1.7` conda environment, sets up
 
 For the given scan, the script will:
 
-1. **Register to Atlas**: Perform a non-linear (SyN) registration of your native T1c scan to the SRI24 T1 atlas using `antspyx` (defined in [registration.py](registration.py)).
+1. **Register to Atlas**: Perform a non-linear (SyN) registration of your registration modality (e.g., T1c) to the SRI24 T1 atlas using `antspyx`, and map all other input modalities into this atlas space.
 2. **Whole Tumor Segmentation**: Run `mri_TumorSynth --wholetumor` to segment the full brain and tumor (defined in [segmentation.py](segmentation.py)).
 3. **Inner Tumor Segmentation**: Create a masked ROI of the tumor and run `mri_TumorSynth --innertumor` to identify specific sub-structures (necrosis, enhancing tumor, and peritumoral edema).
 4. **Native Space Transformation**: Map all resulting masks and segmentations back to the original patient's native space and save them in the `outputs/` directory.

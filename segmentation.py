@@ -1,17 +1,17 @@
-import subprocess
 import ants
 from pathlib import Path
-from config import TUMORSYNTH_DIR, INNER_TUMOR_LABELS
+# Path to the local TumorSynth tools folder in this repository
+TUMORSYNTH_DIR = Path(__file__).parent.absolute() / 'tools' / 'tumorsynth'
 
 import os
 from utils import run_cmd, log
 
-def execute_tumorsynth(input_img: Path, out_img: Path, mask_type: str = 'wholetumor', use_gpu: bool = False):
+def execute_tumorsynth(input_imgs: list[Path], out_img: Path, mask_type: str = 'wholetumor', use_gpu: bool = False):
     """
     Step 2/4: Runs the mri_TumorSynth command line tool for segmentation.
 
     Args:
-        input_img: Path to the input NIfTI image (T1c in atlas or ROI in atlas).
+        input_imgs: List of paths to the input NIfTI images (in atlas space).
         out_img: Path where the raw segmentation/parcellation mask will be saved.
         mask_type: Either 'wholetumor' or 'innertumor' (default: 'wholetumor').
         use_gpu: If True, uses GPU acceleration. If False, runs on CPU.
@@ -27,18 +27,20 @@ def execute_tumorsynth(input_img: Path, out_img: Path, mask_type: str = 'wholetu
     script = TUMORSYNTH_DIR / 'mri_TumorSynth'
     if not script.exists():
         raise FileNotFoundError(
-            f"Could not find 'mri_TumorSynth' script at {script}. "
-            "Please check the TUMORSYNTH_DIR path in config.py"
+            f"Could not find 'mri_TumorSynth' script at {script}."
         )
 
     # Query the physical/logical CPU count to limit thread allocation.
     # Passing -1 or too many threads can cause PyTorch/OMP runtime errors.
     num_threads = str(os.cpu_count() or 4)
 
+    # Combine input images as a comma-separated string
+    input_imgs_str = ",".join(str(p) for p in input_imgs)
+
     # Build the list of arguments to pass to the TumorSynth command.
     cmd = [
         str(script),
-        '--i', str(input_img),
+        '--i', input_imgs_str,
         '--o', str(out_img),
         '--threads', num_threads,
         '--nnUnet', str(TUMORSYNTH_DIR)
@@ -68,7 +70,7 @@ def extract_whole_tumor_mask(wt_atlas_img):
     """
     return ants.threshold_image(wt_atlas_img, low_thresh=17.5, high_thresh=18.5)
 
-def extract_sub_masks(it_native_img, scan_out_dir: Path, scan_name: str):
+def extract_sub_masks(it_native_img, scan_out_dir: Path, scan_name: str, inner_tumor_labels: dict):
     """
     Step 6: Extract individual BraTS-compliant sub-masks from inner tumor segmentation.
 
@@ -76,12 +78,14 @@ def extract_sub_masks(it_native_img, scan_out_dir: Path, scan_name: str):
         it_native_img: ANTsImage of the inner tumor segmentation in native space.
         scan_out_dir: Path to the output directory where sub-masks will be saved.
         scan_name: Base name of the scan for output file naming.
+        inner_tumor_labels: Dictionary mapping structure name to label integer.
+
 
     Returns:
         None
     """
     # Iterate over each predefined inner tumor sub-structure (necrosis, enhancing, etc.)
-    for name, label in INNER_TUMOR_LABELS.items():
+    for name, label in inner_tumor_labels.items():
         # Apply a narrow threshold around the integer label to extract the binary region.
         mask_native_img = ants.threshold_image(
             it_native_img, low_thresh=label - 0.5, high_thresh=label + 0.5

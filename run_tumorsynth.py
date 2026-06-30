@@ -1,17 +1,28 @@
-import argparse
+import argparse, shutil, ants
+import numpy as np
 from pathlib import Path
-import ants
 
-from registration import register_to_atlas, transform_to_native
+from registration import register_to_atlas, transform_to_native, transform_to_atlas
 from segmentation import execute_tumorsynth, extract_whole_tumor_mask, extract_sub_masks
 from utils import log
 
-def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_gpu: bool = False, cleanup: bool = False):
+
+INNER_TUMOR_LABELS = {
+    'necrosis': 1,
+    'enhancing_tumor': 4,
+    'edema': 2,
+}
+
+
+def process_scan(input_paths: list[Path], reg_input_path: Path, scan_name: str, output_dir: Path, atlas_dir: Path, use_gpu: bool = False, cleanup: bool = False):
     """
-    Pipeline: Processes a single T1c scan through the complete TumorSynth pipeline.
+    Pipeline: Processes multi-modal MRI scans through the complete TumorSynth pipeline.
 
     Args:
-        native_t1c_path: Path to the input native T1c NIfTI scan.
+        input_paths: List of paths to the input native NIfTI scans (e.g., T1c, T2, FLAIR).
+                     Must be co-registered to each other.
+        reg_input_path: The specific input file to use for atlas registration.
+        scan_name: Base name for output files and directory.
         output_dir: Path to the base directory where results will be stored.
         atlas_dir: Path to the SRI24 atlas templates directory.
         use_gpu: If True, uses GPU for segmentation.
@@ -20,87 +31,92 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     Returns:
         None
     """
-    # Parse scan base name safely (e.g. 'UCSF-PDGM-0004_T1c' from 'UCSF-PDGM-0004_T1c.nii.gz')
-    # and prepare the dedicated output directory.
-    scan_name = native_t1c_path.name.split('.nii')[0]
+    # Prepare the dedicated output directory.
     scan_out_dir = output_dir / scan_name
     scan_out_dir.mkdir(parents=True, exist_ok=True)
 
     # Define paths to the SRI24 atlas reference templates.
-    # TumorSynth is trained on SRI24-aligned brain scans, so registration is mandatory.
     sri24_t1 = atlas_dir / 'SRI24_T1.nii.gz'
     sri24_mask = atlas_dir / 'SRI24_brain_mask.nii.gz'
     
-    log(f"[{scan_name}] 1. Registering to SRI24 Atlas... ", newline=False)
-    # Load the moving (native T1c) and fixed (atlas T1 and brain mask) images into ANTs.
-    native_img = ants.image_read(str(native_t1c_path))
+    log(f"[{scan_name}] 1. Registering to SRI24 Atlas using {reg_input_path.name}... ", newline=False)
+    # Load the moving image (registration modality) and fixed images (atlas T1 and brain mask).
+    reg_native_img = ants.image_read(str(reg_input_path))
     atlas_img = ants.image_read(str(sri24_t1))
     atlas_mask = ants.image_read(str(sri24_mask))
     
-    # Perform SyN registration, skull-strip the resulting image, and write to disk.
-    # We save to disk because the TumorSynth CLI expects file paths as inputs.
-    t1c_in_atlas_img, registration = register_to_atlas(native_img, atlas_img, atlas_mask)
-    t1c_in_atlas_path = scan_out_dir / f"{scan_name}_t1c_SRI24.nii.gz"
-    ants.image_write(t1c_in_atlas_img, str(t1c_in_atlas_path))
-    
+    # Perform SyN registration on the primary modality
+    reg_in_atlas_img, registration = register_to_atlas(reg_native_img, atlas_img, atlas_mask)
     log("done.", timestamp=False)
-    log(f"[{scan_name}] 2. Running Whole Tumor Segmentation... ", newline=False)
-    # Run TumorSynth in 'wholetumor' mode. This generates a raw multi-label parcellation.
+
+    log(f"[{scan_name}] 2. Transforming all modalities to Atlas space... ")
+    atlas_paths = []
+    roi_paths = []
+    
+    for ipath in input_paths:
+        modality_name = ipath.name.split('.nii')[0]
+        # If it's the registration modality, we already have it transformed and skull-stripped
+        if ipath == reg_input_path:
+            mod_in_atlas_img = reg_in_atlas_img
+        else:
+            mod_native_img = ants.image_read(str(ipath))
+            # Transform to atlas space using forward transforms
+            mod_in_atlas_raw = transform_to_atlas(atlas_img, mod_native_img, registration['fwdtransforms'])
+            # Skull strip using atlas mask
+            mod_in_atlas_img = mod_in_atlas_raw * atlas_mask
+            
+        # Save skull-stripped atlas-space image
+        mod_atlas_path = scan_out_dir / f"{modality_name}_SRI24.nii.gz"
+        ants.image_write(mod_in_atlas_img, str(mod_atlas_path))
+        atlas_paths.append(mod_atlas_path)
+        log(f"  - Saved {mod_atlas_path.name}")
+    
+    log(f"[{scan_name}] 3. Running Whole Tumor Segmentation... ", newline=False)
+    # Run TumorSynth in 'wholetumor' mode on all modalities
     wt_raw_atlas_path = scan_out_dir / "tumorsynth_wt_raw_SRI24.nii.gz"
-    execute_tumorsynth(t1c_in_atlas_path, wt_raw_atlas_path, mask_type='wholetumor', use_gpu=use_gpu)
+    execute_tumorsynth(atlas_paths, wt_raw_atlas_path, mask_type='wholetumor', use_gpu=use_gpu)
     log("done.", timestamp=False)
     
-    # Extract the binary whole tumor mask from the parcellation by thresholding label 18.
-    # Save the mask in atlas space for downstream masking and potential verification.
+    # Extract the binary whole tumor mask
     wt_atlas_img = ants.image_read(str(wt_raw_atlas_path))
     wt_mask_atlas_img = extract_whole_tumor_mask(wt_atlas_img)
     ants.image_write(wt_mask_atlas_img, str(scan_out_dir / f"{scan_name}_whole_tumor_mask_SRI24.nii.gz"))
     
-    log(f"[{scan_name}] 3. Running Inner Tumor Segmentation... ", newline=False)
-    # Mask the atlas-aligned T1c image with the binary whole tumor mask to isolate the tumor ROI.
-    # The inner tumor segmentation model requires this masked ROI as input to focus on internal sub-structures.
-    t1c_roi_img = t1c_in_atlas_img * wt_mask_atlas_img
-    t1c_roi_path = scan_out_dir / f"{scan_name}_t1c_roi_SRI24.nii.gz"
-    ants.image_write(t1c_roi_img, str(t1c_roi_path))
+    log(f"[{scan_name}] 4. Preparing ROIs and Running Inner Tumor Segmentation... ", newline=False)
+    # Mask all atlas-aligned images with the binary whole tumor mask to isolate the tumor ROI.
+    for ipath, mod_atlas_path in zip(input_paths, atlas_paths):
+        modality_name = ipath.name.split('.nii')[0]
+        mod_atlas_img = ants.image_read(str(mod_atlas_path))
+        roi_img = mod_atlas_img * wt_mask_atlas_img
+        roi_path = scan_out_dir / f"{modality_name}_roi_SRI24.nii.gz"
+        ants.image_write(roi_img, str(roi_path))
+        roi_paths.append(roi_path)
     
-    # Run TumorSynth in 'innertumor' mode on the masked ROI to segment inner structures.
+    # Run TumorSynth in 'innertumor' mode
     it_raw_atlas_path = scan_out_dir / "tumorsynth_it_raw_SRI24.nii.gz"
-    execute_tumorsynth(t1c_roi_path, it_raw_atlas_path, mask_type='innertumor', use_gpu=use_gpu)
+    execute_tumorsynth(roi_paths, it_raw_atlas_path, mask_type='innertumor', use_gpu=use_gpu)
     it_atlas_img = ants.image_read(str(it_raw_atlas_path))
     log("done.", timestamp=False)
     
-    log(f"[{scan_name}] 4. Transforming results back to Native Space... ", newline=False)
-    # Fetch the list of inverse registration transforms to map back to the native geometry.
+    log(f"[{scan_name}] 5. Transforming results back to Native Space... ", newline=False)
     inv_transforms = registration['invtransforms']
     
-    # Transform the binary whole tumor mask from atlas space back to the native T1c space.
-    wt_mask_native_img = transform_to_native(native_img, wt_mask_atlas_img, inv_transforms)
+    # Transform masks back to native space (using reg_native_img as reference geometry)
+    wt_mask_native_img = transform_to_native(reg_native_img, wt_mask_atlas_img, inv_transforms)
     ants.image_write(wt_mask_native_img, str(scan_out_dir / f"{scan_name}_whole_tumor_mask.nii.gz"))
     
-    # Transform the multi-class inner tumor segmentation from atlas space back to native space.
-    it_native_img = transform_to_native(native_img, it_atlas_img, inv_transforms)
+    it_native_img = transform_to_native(reg_native_img, it_atlas_img, inv_transforms)
     
-    # Remap the internal model labels to your configured output labels in config.py.
-    # The raw model outputs:
-    # 1 -> edema
-    # 2 -> enhancing_tumor
-    # 3 -> necrosis
+    # Remap labels
     it_arr = it_native_img.numpy()
-    import numpy as np
     remapped_arr = np.zeros_like(it_arr)
-    
-    from config import INNER_TUMOR_LABELS
-    raw_to_class = {
-        1: 'edema',
-        2: 'enhancing_tumor',
-        3: 'necrosis'
-    }
+    raw_to_class = {1: 'edema', 2: 'enhancing_tumor', 3: 'necrosis'}
     
     for raw_val, class_name in raw_to_class.items():
         target_val = INNER_TUMOR_LABELS.get(class_name)
         if target_val is not None:
             remapped_arr[it_arr == raw_val] = target_val
-    
+            
     it_native_img_remapped = ants.from_numpy(
         remapped_arr.astype(np.float32),
         origin=it_native_img.origin,
@@ -109,25 +125,19 @@ def process_scan(native_t1c_path: Path, output_dir: Path, atlas_dir: Path, use_g
     )
     
     ants.image_write(it_native_img_remapped, str(scan_out_dir / f"{scan_name}_inner_tumor_seg.nii.gz"))
-    
-    # Extract and save individual binary sub-masks (necrosis, enhancing, etc.) in native space.
-    extract_sub_masks(it_native_img_remapped, scan_out_dir, scan_name)
+    extract_sub_masks(it_native_img_remapped, scan_out_dir, scan_name, INNER_TUMOR_LABELS)
     log("done.", timestamp=False)
         
     if cleanup:
-        log(f"[{scan_name}] 5. Cleaning up intermediate files... ", newline=False)
-        # Delete temporary atlas-aligned scans and intermediate mask files.
-        paths_to_remove = [
-            t1c_in_atlas_path,
+        log(f"[{scan_name}] 6. Cleaning up intermediate files... ", newline=False)
+        paths_to_remove = atlas_paths + roi_paths + [
             wt_raw_atlas_path,
             scan_out_dir / f"{scan_name}_whole_tumor_mask_SRI24.nii.gz",
-            t1c_roi_path,
             it_raw_atlas_path
         ]
         for p in paths_to_remove:
             if p.exists(): p.unlink()
             
-        # Delete the forward and inverse transform files generated by ANTs registration to save disk space.
         for t_list in [registration.get('fwdtransforms', []), registration.get('invtransforms', [])]:
             for t_path in t_list:
                 p = Path(t_path)
@@ -140,10 +150,15 @@ def main():
     """
     Parses command line arguments and runs process_scan.
     """
-    parser = argparse.ArgumentParser(description="Run TumorSynth pipeline on a single native T1c NIfTI scan.")
-    parser.add_argument("input_t1c", type=Path, help="Path to the input native T1c NIfTI scan")
+    parser = argparse.ArgumentParser(description="Run TumorSynth pipeline on multi-modal native NIfTI scans.")
+    parser.add_argument("-i", "--inputs", type=Path, nargs='+', required=True, 
+                        help="Path to the input native NIfTI scans (e.g., T1c, T2, FLAIR). Must be co-registered.")
+    parser.add_argument("--reg-input", type=Path, default=None,
+                        help="The input file to use for atlas registration. Defaults to the first input.")
+    parser.add_argument("--scan-name", type=str, default=None,
+                        help="Base name for the outputs. Defaults to the name of the reg-input without extension.")
     parser.add_argument("-o", "--output-dir", type=Path, default=None, 
-                        help="Directory to save the outputs. Defaults to the same directory as the input scan.")
+                        help="Directory to save the outputs. Defaults to the same directory as the reg-input scan.")
     parser.add_argument("-a", "--atlas-dir", type=Path, default=None,
                         help="Path to the SRI24 atlas directory. Defaults to assets/SRI24_atlas relative to this script.")
     parser.add_argument("-g", "--gpu", action="store_true", help="Run TumorSynth using GPU")
@@ -151,7 +166,6 @@ def main():
     args = parser.parse_args()
 
     # Check for FSL dependencies upfront to avoid failing after the long registration step.
-    import shutil
     missing_deps = []
     for dep in ('fslmaths', 'fslmerge'):
         if not shutil.which(dep):
@@ -162,14 +176,25 @@ def main():
         log("On a cluster, you may need to run 'module load fsl' or source your FSL configuration.")
         return
 
-    # Resolve the input path and verify it exists before processing.
-    input_path = args.input_t1c.resolve()
-    if not input_path.exists():
-        log(f"Error: Input file {input_path} does not exist.")
-        return
+    # Resolve input paths
+    input_paths = [p.resolve() for p in args.inputs]
+    for p in input_paths:
+        if not p.exists():
+            log(f"Error: Input file {p} does not exist.")
+            return
+            
+    # Resolve reg_input
+    if args.reg_input:
+        reg_input_path = args.reg_input.resolve()
+        if reg_input_path not in input_paths:
+            log(f"Error: reg-input {reg_input_path} must be one of the files provided in --inputs.")
+            return
+    else:
+        reg_input_path = input_paths[0]
 
-    # Use the user-defined output directory or fall back to the input file's parent directory.
-    out_dir = args.output_dir.resolve() if args.output_dir else input_path.parent
+    # Determine scan name and output directory
+    scan_name = args.scan_name if args.scan_name else reg_input_path.name.split('.nii')[0]
+    out_dir = args.output_dir.resolve() if args.output_dir else reg_input_path.parent
     
     # Locate the atlas templates folder, defaulting to the assets/SRI24_atlas directory in this repo.
     base_dir = Path(__file__).parent.absolute()
@@ -179,8 +204,8 @@ def main():
         log(f"Error: Atlas directory {atlas_dir} does not exist.")
         return
 
-    # Run the pipeline on the specified scan.
-    process_scan(input_path, out_dir, atlas_dir, use_gpu=args.gpu, cleanup=args.cleanup)
+    # Run the pipeline on the specified scans.
+    process_scan(input_paths, reg_input_path, scan_name, out_dir, atlas_dir, use_gpu=args.gpu, cleanup=args.cleanup)
 
 if __name__ == "__main__":
     main()

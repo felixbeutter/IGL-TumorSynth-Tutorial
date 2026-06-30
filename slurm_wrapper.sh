@@ -22,16 +22,5 @@ mkdir -p logs
 # Set python path if needed
 export PYTHONPATH=$(pwd)
 
-# Require input scan path
-INPUT_SCAN=$1
-
-if [ -z "$INPUT_SCAN" ]; then
-    echo "Usage: sbatch $0 <input_scan_path> [extra_args...]"
-    exit 1
-fi
-
-if [ "$#" -ge 1 ]; then
-    shift 1
-fi
-
-python run_tumorsynth.py "$INPUT_SCAN" "$@"
+# Pass all arguments directly to run_tumorsynth.py
+python run_tumorsynth.py "$@"

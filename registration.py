@@ -1,5 +1,4 @@
 import ants
-from pathlib import Path
 
 def register_to_atlas(native_img, atlas_img, atlas_mask):
     """
@@ -59,3 +58,25 @@ def transform_to_native(native_img, img_in_atlas, inv_transforms):
     )
     
     return native_space_img
+
+def transform_to_atlas(atlas_img, moving_img, fwd_transforms):
+    """
+    Apply forward transformations to map a native image into the atlas space.
+
+    Args:
+        atlas_img: The fixed ANTsImage in atlas space (used as reference geometry).
+        moving_img: The ANTsImage in native space to be transformed.
+        fwd_transforms: List of paths to the forward transforms.
+
+    Returns:
+        ants.ANTsImage: The transformed image in atlas space.
+    """
+    # For mapping from native to atlas, we use the forward transforms as they are.
+    atlas_space_img = ants.apply_transforms(
+        fixed=atlas_img, 
+        moving=moving_img,
+        transformlist=fwd_transforms,
+        interpolator='linear'
+    )
+    
+    return atlas_space_img
