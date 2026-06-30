@@ -1,6 +1,6 @@
 # TumorSynth Tutorial
 
-This repository provides a standalone, clean, and simple tutorial on how to use **TumorSynth** for brain tumor segmentation. It demonstrates how to take native multi-modal MRI scans (e.g., T1c, T2, FLAIR), align them to a common atlas (SRI24), run TumorSynth to segment the whole tumor and inner tumor sub-structures, and transform the segmentations back to the original native space.
+This repository provides a simple tutorial on how to use **TumorSynth** for brain tumor segmentation. It demonstrates how to take native multi-modal MRI scans (e.g., T1c, T2, FLAIR), align them to a common atlas (SRI24), run TumorSynth to segment the whole tumor and inner tumor sub-structures, and transform the segmentations back to the original native space.
 
 ---
 
@@ -79,7 +79,6 @@ source tools/tumorsynth/nnUNet_v1.7_path.sh
 
 The `assets/` folder is structured as follows:
 - `SRI24_atlas/`: Contains the reference atlas and brain mask required for registration.
-- `sample_scans/`: Place your raw, native space `.nii.gz` scans here. They should be co-registered to each other if you are passing multiple modalities per patient.
 
 To run the pipeline on a scan:
 
@@ -93,18 +92,18 @@ To run the pipeline on a scan:
 
    On **macOS** (CPU-only):
    ```bash
-   python run_tumorsynth.py -i assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c
+   python run_tumorsynth.py -i path_to_scan.nii.gz -o outputs -c
    ```
 
    On **Linux/HPC** (with GPU):
    ```bash
-   python run_tumorsynth.py -i assets/sample_scans/UCSF-PDGM-0004_T1c.nii.gz -o outputs -c --gpu
+   python run_tumorsynth.py -i path_to_scan.nii.gz -o outputs -c --gpu
    ```
 
 ### Command Line Arguments
 
-- `-i`, `--inputs`: (Required) Path to one or more native `.nii.gz` scans (e.g., T1c, T2, FLAIR). If multiple scans are provided, they **must be co-registered** to each other in their native space.
-- `--reg-input`: (Optional) Path to the specific input file used for atlas registration. Defaults to the first input. Using a T1 or T1c scan is highly recommended.
+- `-i`, `--inputs`: (Required) Path to one or more `.nii.gz` scans (e.g., T1c, T2, FLAIR). If multiple scans are provided, they **must be co-registered** to each other in their native space.
+- `--reg-input`: (Optional) Path to the specific input file used for atlas registration. Defaults to the first input. Using a T1 or T1c scan is recommended.
 - `--scan-name`: (Optional) Base name for the outputs. Defaults to the name of the `--reg-input` without its extension.
 - `-o`, `--output-dir`: (Optional) Path to save the outputs. Defaults to the same directory as the reg-input scan.
 - `-a`, `--atlas-dir`: (Optional) Path to the SRI24 atlas. Defaults to `assets/SRI24_atlas/`.
