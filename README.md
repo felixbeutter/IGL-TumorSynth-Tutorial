@@ -137,6 +137,7 @@ For the given scan, the script will:
 
 All results are stored in a scan-specific directory under the chosen output directory (e.g., `outputs/UCSF-PDGM-0004_T1c/`):
 - `<scan_name>_whole_tumor_mask.nii.gz`: Binary mask of the whole tumor in native space.
+- `<scan_name>_brain_tissue_seg.nii.gz`: Complete 18-label parcellation of healthy brain tissues (labels 1-17) and the whole tumor (label 18) in native space.
 - `<scan_name>_inner_tumor_seg.nii.gz`: Multi-label segmentation of inner tumor structures in native space.
 - `<scan_name>_necrosis_mask.nii.gz`: Binary mask of the necrotic / non-enhancing tumor core (Label 1, NCR/NET).
 - `<scan_name>_enhancing_tumor_mask.nii.gz`: Binary mask of the enhancing tumor (Label 2, ET).

@@ -105,6 +105,10 @@ def process_scan(input_paths: list[Path], reg_input_path: Path, scan_name: str, 
     wt_mask_native_img = transform_to_native(reg_native_img, wt_mask_atlas_img, inv_transforms)
     ants.image_write(wt_mask_native_img, str(scan_out_dir / f"{scan_name}_whole_tumor_mask.nii.gz"))
     
+    # Transform the complete 18-label brain tissue + tumor segmentation back to native space
+    tissue_native_img = transform_to_native(reg_native_img, wt_atlas_img, inv_transforms)
+    ants.image_write(tissue_native_img, str(scan_out_dir / f"{scan_name}_brain_tissue_seg.nii.gz"))
+    
     it_native_img = transform_to_native(reg_native_img, it_atlas_img, inv_transforms)
     
     # Remap labels
