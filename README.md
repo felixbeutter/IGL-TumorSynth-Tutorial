@@ -141,5 +141,3 @@ All results are stored in a scan-specific directory under the chosen output dire
 - `<scan_name>_necrosis_mask.nii.gz`: Binary mask of the necrotic / non-enhancing tumor core (Label 1, NCR/NET).
 - `<scan_name>_enhancing_tumor_mask.nii.gz`: Binary mask of the enhancing tumor (Label 2, ET).
 - `<scan_name>_edema_mask.nii.gz`: Binary mask of the peritumoral edema (Label 3, ED).
-
-These structures are configured in [config.py](config.py).
